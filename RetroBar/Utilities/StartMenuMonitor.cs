@@ -18,6 +18,7 @@ namespace RetroBar.Utilities
         private DispatcherTimer _poller;
         private bool _isVisible;
         private IntPtr _taskbarHwndActivated;
+        private AppBarScreen _startMenuScreen;
 
         public event EventHandler<StartMenuMonitorEventArgs> StartMenuVisibilityChanged;
 
@@ -58,6 +59,10 @@ namespace RetroBar.Utilities
             {
                 // Windows 7, StartIsBack, Start8+
                 newIsVisible = true;
+                if (_startMenuScreen != null)
+                {
+                    relocateStartMenuByClass("DV2ControlHost");
+                }
                 startHmonitor = hMonitorClassicStartMenu();
             }
 
@@ -95,6 +100,7 @@ namespace RetroBar.Utilities
                 // Now that it has been consumed, reset to prevent sending stale data
                 // if the menu is opened again not by the start button.
                 _taskbarHwndActivated = IntPtr.Zero;
+                _startMenuScreen = null;
             }
         }
 
@@ -183,6 +189,21 @@ namespace RetroBar.Utilities
             GetWindowRect(hStartMenu, out ManagedShell.Interop.NativeMethods.Rect startMenuRect);
             GetWindowRect(_taskbarHwndActivated, out ManagedShell.Interop.NativeMethods.Rect taskbarRect);
 
+            if (_startMenuScreen != null &&
+                _startMenuScreen.HMonitor != MonitorFromWindow(_taskbarHwndActivated, MONITOR_DEFAULTTONEAREST))
+            {
+                // There need not be a RetroBar on the requested screen. Anchor to its work-area edge.
+                var area = _startMenuScreen.WorkingArea;
+                taskbarRect = new ManagedShell.Interop.NativeMethods.Rect(area.Left, area.Top, area.Right, area.Bottom);
+                switch (Settings.Instance.Edge)
+                {
+                    case AppBarEdge.Left: taskbarRect.Right = area.Left; break;
+                    case AppBarEdge.Top: taskbarRect.Bottom = area.Top; break;
+                    case AppBarEdge.Right: taskbarRect.Left = area.Right; break;
+                    case AppBarEdge.Bottom: taskbarRect.Top = area.Bottom; break;
+                }
+            }
+
             int x = 0, y = 0;
             switch (Settings.Instance.Edge)
             {
@@ -233,7 +254,7 @@ namespace RetroBar.Utilities
             SetWindowPos(hStartMenu, IntPtr.Zero, x, y, 0, 0, (int)(SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOZORDER));
         }
 
-        private IImmersiveMonitor GetImmersiveMonitor(ManagedShell.UWPInterop.Interfaces.IServiceProvider shell, IntPtr hWnd)
+        private IImmersiveMonitor GetImmersiveMonitor(ManagedShell.UWPInterop.Interfaces.IServiceProvider shell, IntPtr hMonitor)
         {
             if (shell.QueryService(ref CLSID_ImmersiveMonitorManager, ref IID_ImmersiveMonitorManager, out object monitorManagerObj) != 0)
             {
@@ -242,16 +263,16 @@ namespace RetroBar.Utilities
             }
             IImmersiveMonitorManager monitorManager = (IImmersiveMonitorManager)monitorManagerObj;
 
-            if (monitorManager.GetFromHandle(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), out IImmersiveMonitor monitor) != 0)
+            if (monitorManager.GetFromHandle(hMonitor, out IImmersiveMonitor monitor) != 0)
             {
-                ShellLogger.Warning("StartMenuMonitor: Failed to get monitor from taskbar window handle");
+                ShellLogger.Warning("StartMenuMonitor: Failed to get the requested IImmersiveMonitor");
                 return null;
             }
 
             return monitor;
         }
 
-        private IImmersiveLauncher_Win10RS1 GetImmersiveLauncher_Win10RS1(IntPtr taskbarHwnd)
+        private IImmersiveLauncher_Win10RS1 GetImmersiveLauncher_Win10RS1(IntPtr hMonitor)
         {
             var shell = ImmersiveShellHelper.GetImmersiveShell();
             if (shell.QueryService(ref CLSID_ImmersiveLauncher, ref IID_ImmersiveLauncher_Win10RS1, out object immersiveLauncherObj) != 0)
@@ -261,7 +282,7 @@ namespace RetroBar.Utilities
             }
             IImmersiveLauncher_Win10RS1 immersiveLauncher = (IImmersiveLauncher_Win10RS1)immersiveLauncherObj;
 
-            IImmersiveMonitor monitor = GetImmersiveMonitor(shell, taskbarHwnd);
+            IImmersiveMonitor monitor = GetImmersiveMonitor(shell, hMonitor);
             if (monitor == null || immersiveLauncher.ConnectToMonitor(monitor) != 0)
             {
                 ShellLogger.Warning("StartMenuMonitor: Failed to connect IImmersiveLauncher_Win10RS1 to monitor");
@@ -271,7 +292,7 @@ namespace RetroBar.Utilities
             return immersiveLauncher;
         }
 
-        private IImmersiveLauncher_Win81 GetImmersiveLauncher_Win81(IntPtr taskbarHwnd)
+        private IImmersiveLauncher_Win81 GetImmersiveLauncher_Win81(IntPtr hMonitor)
         {
             var shell = ImmersiveShellHelper.GetImmersiveShell();
             if (shell.QueryService(ref CLSID_ImmersiveLauncher, ref IID_ImmersiveLauncher_Win81, out object immersiveLauncherObj) != 0)
@@ -281,7 +302,7 @@ namespace RetroBar.Utilities
             }
             IImmersiveLauncher_Win81 immersiveLauncher = (IImmersiveLauncher_Win81)immersiveLauncherObj;
 
-            IImmersiveMonitor monitor = GetImmersiveMonitor(shell, taskbarHwnd);
+            IImmersiveMonitor monitor = GetImmersiveMonitor(shell, hMonitor);
             if (monitor == null || immersiveLauncher.ConnectToMonitor(monitor) != 0)
             {
                 ShellLogger.Warning("StartMenuMonitor: Failed to connect IImmersiveLauncher_Win81 to monitor");
@@ -294,6 +315,11 @@ namespace RetroBar.Utilities
         internal void ShowStartMenu(IntPtr taskbarHwnd)
         {
             _taskbarHwndActivated = taskbarHwnd;
+            string target = Settings.Instance.StartMenuMonitorDeviceName;
+            _startMenuScreen = string.IsNullOrEmpty(target) ? null :
+                MonitorSelection.Select(AppBarScreen.FromAllScreens(), false, target,
+                    screen => screen.DeviceName, screen => screen.Primary)[0];
+            IntPtr hMonitor = _startMenuScreen?.HMonitor ?? MonitorFromWindow(taskbarHwnd, MONITOR_DEFAULTTONEAREST);
 
             if (!EnvironmentHelper.IsWindows10OrBetter ||
                 FindWindowEx(IntPtr.Zero, IntPtr.Zero, "OpenShell.COwnerWindow", IntPtr.Zero) != IntPtr.Zero ||
@@ -313,7 +339,7 @@ namespace RetroBar.Utilities
 
                 if (EnvironmentHelper.IsWindows10RS1OrBetter)
                 {
-                    IImmersiveLauncher_Win10RS1 immersiveLauncher = GetImmersiveLauncher_Win10RS1(taskbarHwnd);
+                    IImmersiveLauncher_Win10RS1 immersiveLauncher = GetImmersiveLauncher_Win10RS1(hMonitor);
                     if (immersiveLauncher != null &&
                         immersiveLauncher.ShowStartView(IMMERSIVELAUNCHERSHOWMETHOD.ILSM_STARTBUTTON, IMMERSIVELAUNCHERSHOWFLAGS.ILSF_IGNORE_SET_FOREGROUND_ERROR) == 0)
                     {
@@ -322,7 +348,7 @@ namespace RetroBar.Utilities
                 }
                 else
                 {
-                    IImmersiveLauncher_Win81 immersiveLauncher = GetImmersiveLauncher_Win81(taskbarHwnd);
+                    IImmersiveLauncher_Win81 immersiveLauncher = GetImmersiveLauncher_Win81(hMonitor);
                     if (immersiveLauncher != null &&
                         immersiveLauncher.ShowStartView(IMMERSIVELAUNCHERSHOWMETHOD.ILSM_STARTBUTTON, IMMERSIVELAUNCHERSHOWFLAGS.ILSF_IGNORE_SET_FOREGROUND_ERROR) == 0)
                     {

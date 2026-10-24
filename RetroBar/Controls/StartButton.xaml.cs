@@ -89,7 +89,7 @@ namespace RetroBar.Controls
             Host?.SetTrayHost();
             Host?.SetStartMenuOpen(true);
             pendingOpenTimer.Start();
-            if (Host != null && StartMenuMonitor != null && Settings.Instance.ShowMultiMon && Settings.Instance.ShowStartButtonMultiMon)
+            if (Host != null && StartMenuMonitor != null)
             {
                 StartMenuMonitor.ShowStartMenu(Host.Handle);
             }
@@ -166,10 +166,10 @@ namespace RetroBar.Controls
         private void AppVisibilityHelper_StartMenuVisibilityChanged(object? sender, StartMenuMonitor.StartMenuMonitorEventArgs e)
         {
             if (e.Visible && Host != null &&
-                ((e.TaskbarHwndActivated != IntPtr.Zero && e.TaskbarHwndActivated != Host.Handle) ||
+                (e.TaskbarHwndActivated != IntPtr.Zero ? e.TaskbarHwndActivated != Host.Handle :
                 (e.StartHmonitor != IntPtr.Zero && e.StartHmonitor != Host.Screen.HMonitor)))
             {
-                // Only set as visible when activated from our taskbar
+                // An explicit activation belongs to its source bar, even when Start opens on another monitor.
                 return;
             }
             SetStartMenuState(e.Visible);

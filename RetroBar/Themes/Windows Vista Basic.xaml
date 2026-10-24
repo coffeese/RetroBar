@@ -26,29 +26,14 @@
         <GradientStop Color="#18191B"
                       Offset="1.0" />
     </LinearGradientBrush>
-    <LinearGradientBrush x:Key="TaskbarVerticalBackground"
-                         StartPoint="0,0"
-                         EndPoint="1,0">
-        <GradientStop Color="#8B8C8C"
-                      Offset="0.0" />
-        <GradientStop Color="#808182"
-                      Offset="0.05" />
-        <GradientStop Color="#4B4C4D"
-                      Offset="0.15" />
-        <GradientStop Color="#454647"
-                      Offset="0.17" />
-        <GradientStop Color="#181A1C"
-                      Offset="0.171" />
-        <GradientStop Color="#1C1E1F"
-                      Offset="1.0" />
-    </LinearGradientBrush>
+    <SolidColorBrush x:Key="TaskbarVerticalBackground" Color="#1C1E1F" />
     <SolidColorBrush x:Key="TaskbarWindowBackground" Color="#000000" />
     <SolidColorBrush x:Key="TaskbarTopBorder" Color="#545454" />
     <SolidColorBrush x:Key="TaskbarTopInnerBorder" Color="#B4B5B5" />
     <SolidColorBrush x:Key="TaskbarBottomInnerBorder" Color="#17191A" />
     <SolidColorBrush x:Key="TaskbarBottomBorder" Color="#131415" />
-    <SolidColorBrush x:Key="TaskbarVerticalTopBorder" Color="#545454" />
-    <SolidColorBrush x:Key="TaskbarVerticalTopInnerBorder" Color="#B4B4B4" />
+    <SolidColorBrush x:Key="TaskbarVerticalTopBorder" Color="#1B1D1F" />
+    <SolidColorBrush x:Key="TaskbarVerticalTopInnerBorder" Color="#1C1E1F" />
     <SolidColorBrush x:Key="TaskbarVerticalBottomInnerBorder" Color="#1C1E1F" />
     <SolidColorBrush x:Key="TaskbarVerticalBottomBorder" Color="#1B1D1F" />
 

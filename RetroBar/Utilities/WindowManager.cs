@@ -4,6 +4,7 @@ using ManagedShell.Common.Logging;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using System.Windows.Threading;
 
 namespace RetroBar.Utilities
 {
@@ -11,8 +12,10 @@ namespace RetroBar.Utilities
     {
         private static object reopenLock = new object();
 
-        private bool _isSettingDisplays;
-        private int _pendingDisplayEvents;
+        private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
+        private bool _reopenPending;
+        private bool _displayChangePending;
+        private bool _disposed;
         private List<AppBarScreen> _screenState = new List<AppBarScreen>();
         private List<Taskbar> _taskbars = new List<Taskbar>();
 
@@ -43,27 +46,41 @@ namespace RetroBar.Utilities
 
         private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Settings.ShowMultiMon))
+            if (e.PropertyName == nameof(Settings.ShowMultiMon) ||
+                e.PropertyName == nameof(Settings.TargetMonitorDeviceName))
             {
-                // Update screen state in case it has changed since last checked
-                _screenState = AppBarScreen.FromAllScreens();
-
-                if (_screenState.Count < 2)
-                {
-                    return;
-                }
-
                 ReopenTaskbars();
             }
         }
 
         public void ReopenTaskbars()
         {
-            lock (reopenLock)
+            if (_disposed || _reopenPending)
             {
-                closeTaskbars();
-                openTaskbars();
+                return;
             }
+
+            // Finish the current settings/display notification before closing its windows.
+            // Multiple bars can request a rebuild during the same notification.
+            _reopenPending = true;
+            _dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    if (!_disposed)
+                    {
+                        lock (reopenLock)
+                        {
+                            closeTaskbars();
+                            openTaskbars();
+                        }
+                    }
+                }
+                finally
+                {
+                    _reopenPending = false;
+                }
+            });
         }
 
         public void NotifyWorkAreaChange()
@@ -80,31 +97,27 @@ namespace RetroBar.Utilities
 
         private void handleDisplayChange()
         {
-            _pendingDisplayEvents++;
-
-            if (_isSettingDisplays)
+            if (_disposed || _displayChangePending)
             {
                 return;
             }
 
-            _isSettingDisplays = true;
-
-            while (_pendingDisplayEvents > 0)
+            _displayChangePending = true;
+            _dispatcher.BeginInvoke(() =>
             {
-                // Skip re-opening taskbars if the screens haven't changed
-                if (!haveDisplaysChanged())
+                try
                 {
-                    _pendingDisplayEvents--;
-                    continue;
+                    // AppBar registration also changes the work area; ignore those notifications.
+                    if (!_disposed && haveDisplaysChanged())
+                    {
+                        ReopenTaskbars();
+                    }
                 }
-
-                ReopenTaskbars();
-
-                _pendingDisplayEvents--;
-            }
-
-            _isSettingDisplays = false;
-            ShellLogger.Debug($"WindowManager: Finished processing display events");
+                finally
+                {
+                    _displayChangePending = false;
+                }
+            });
         }
 
         public bool IsValidHMonitor(IntPtr hMonitor)
@@ -139,16 +152,10 @@ namespace RetroBar.Utilities
 
             ShellLogger.Debug($"WindowManager: Opening taskbars");
 
-            if (Settings.Instance.ShowMultiMon)
+            foreach (var screen in MonitorSelection.Select(_screenState, Settings.Instance.ShowMultiMon,
+                Settings.Instance.TargetMonitorDeviceName, screen => screen.DeviceName, screen => screen.Primary))
             {
-                foreach (var screen in _screenState)
-                {
-                    openTaskbar(screen);
-                }
-            }
-            else
-            {
-                openTaskbar(AppBarScreen.FromPrimaryScreen());
+                openTaskbar(screen);
             }
         }
 
@@ -201,6 +208,7 @@ namespace RetroBar.Utilities
 
         public void Dispose()
         {
+            _disposed = true;
             _shellManager.ExplorerHelper.HideExplorerTaskbar = false;
             Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
         }

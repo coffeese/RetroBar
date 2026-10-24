@@ -213,6 +213,20 @@ namespace RetroBar.Utilities
             set => Set(ref _showMultiMon, value);
         }
 
+        private string _targetMonitorDeviceName = "";
+        public string TargetMonitorDeviceName
+        {
+            get => _targetMonitorDeviceName;
+            set => Set(ref _targetMonitorDeviceName, value ?? "");
+        }
+
+        private string _startMenuMonitorDeviceName = "";
+        public string StartMenuMonitorDeviceName
+        {
+            get => _startMenuMonitorDeviceName;
+            set => Set(ref _startMenuMonitorDeviceName, value ?? "");
+        }
+
         private bool _showQuickLaunch = true;
         public bool ShowQuickLaunch
         {

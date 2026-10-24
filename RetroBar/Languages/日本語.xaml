@@ -32,6 +32,12 @@
     <s:String x:Key="show_input_language">表示入力言語(_L)</s:String>
     <s:String x:Key="show_clock">時計を表示する(_K)</s:String>
     <s:String x:Key="show_multi_mon">タスクバーを複数のディスプレイに表示する(_M)</s:String>
+    <s:String x:Key="single_display">単独表示先(_D)：</s:String>
+    <s:String x:Key="start_menu_display">スタートメニューの表示先：</s:String>
+    <s:String x:Key="start_menu_display_tip">RetroBar のスタートボタンから開くメニューの表示先を選択します。</s:String>
+    <s:String x:Key="same_as_taskbar">タスクバーと同じ</s:String>
+    <s:String x:Key="primary_display">プライマリ</s:String>
+    <s:String x:Key="display_disconnected">未接続・プライマリに表示中</s:String>
     <s:String x:Key="show_start_button_multi_mon">すべてのタスクバーにスタートボタンを表示(_S)</s:String>
     <s:String x:Key="show_quick_launch">クイック起動を表示する(_Q)</s:String>
     <s:String x:Key="select_location">フォルダーを選択(_S)...</s:String>

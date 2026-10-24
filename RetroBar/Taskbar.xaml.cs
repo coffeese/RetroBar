@@ -24,6 +24,9 @@ namespace RetroBar
 
         public bool IsScaled => DpiScale > 1 || Settings.Instance.TaskbarScale > 1;
 
+        // In single-display mode this bar owns global services, even on a secondary monitor.
+        public bool IsMainTaskbar => !Settings.Instance.ShowMultiMon || Screen.Primary;
+
         private double _unlockedMargin;
         public double DesiredRowHeight { get; private set; }
 
@@ -132,7 +135,7 @@ namespace RetroBar
             {
                 bool newTransparency = AppBarMode == AppBarMode.AutoHide || (Application.Current.FindResource("AllowsTransparency") as bool? ?? false);
 
-                if (AllowsTransparency != newTransparency && Screen.Primary)
+                if (AllowsTransparency != newTransparency && IsMainTaskbar)
                 {
                     // Transparency cannot be changed on an open window.
                     windowManager.ReopenTaskbars();
@@ -164,7 +167,7 @@ namespace RetroBar
             {
                 FlowDirection newFlowDirection = Application.Current.FindResource("flow_direction") as FlowDirection? ?? FlowDirection.LeftToRight;
 
-                if (FlowDirection != newFlowDirection && Screen.Primary)
+                if (FlowDirection != newFlowDirection && IsMainTaskbar)
                 {
                     // It is necessary to reopen the taskbars to refresh menu sizes.
                     windowManager.ReopenTaskbars();
@@ -196,7 +199,7 @@ namespace RetroBar
                 {
                     AppBarMode = Settings.Instance.AutoHide ? AppBarMode.AutoHide : AppBarMode.Normal;
                 }
-                else if (Screen.Primary)
+                else if (IsMainTaskbar)
                 {
                     // Auto hide requires transparency
                     // Transparency cannot be changed on an open window.
@@ -248,6 +251,20 @@ namespace RetroBar
         {
             base.WndProc(hwnd, msg, wParam, lParam, ref handled);
 
+            // ManagedShell forwards global display/device changes only from a primary-screen bar.
+            // Specific mode may have no such window, so forward these messages from its sole bar.
+            if (!AllowClose && !Screen.Primary && !string.IsNullOrEmpty(Settings.Instance.TargetMonitorDeviceName))
+            {
+                if (msg == (int)NativeMethods.WM.DISPLAYCHANGE)
+                {
+                    windowManager.NotifyDisplayChange(ScreenSetupReason.DisplayChange);
+                }
+                else if (msg == (int)NativeMethods.WM.DEVICECHANGE && (int)wParam == 0x0007) // DBT_DEVNODES_CHANGED
+                {
+                    windowManager.NotifyDisplayChange(ScreenSetupReason.DeviceChange);
+                }
+            }
+
             if ((msg == (int)NativeMethods.WM.SYSCOLORCHANGE || 
                     msg == (int)NativeMethods.WM.SETTINGCHANGE) && 
                 Settings.Instance.Theme.StartsWith(DictionaryManager.THEME_DEFAULT))
@@ -257,7 +274,8 @@ namespace RetroBar
                 // If the color scheme changes, re-apply the current theme to get updated colors.
                 _dictionaryManager.SetThemeFromSettings();
             }
-            else if (msg == (int)NativeMethods.WM.SETTINGCHANGE && wParam == (IntPtr)NativeMethods.SPI.SETWORKAREA && Settings.Instance.ShowMultiMon)
+            if (msg == (int)NativeMethods.WM.SETTINGCHANGE && wParam == (IntPtr)NativeMethods.SPI.SETWORKAREA &&
+                (Settings.Instance.ShowMultiMon || !string.IsNullOrEmpty(Settings.Instance.TargetMonitorDeviceName)))
             {
                 windowManager.NotifyWorkAreaChange();
             }
@@ -284,10 +302,11 @@ namespace RetroBar
                 // DPI change is per-monitor, update ourselves
                 UpdatePosition();
                 SetLayoutRounding();
+                UpdateTrayPosition();
                 return;
             }
 
-            if (Settings.Instance.ShowMultiMon)
+            if (Settings.Instance.ShowMultiMon || !string.IsNullOrEmpty(Settings.Instance.TargetMonitorDeviceName))
             {
                 // Re-create RetroBar windows based on new screen setup
                 windowManager.NotifyDisplayChange(reason);
@@ -301,7 +320,7 @@ namespace RetroBar
 
         protected override bool ShouldAllowAutoHide()
         {
-            return (!_startMenuOpen || !Screen.Primary) && _openMenus < 1 && base.ShouldAllowAutoHide();
+            return (!_startMenuOpen || !IsMainTaskbar) && _openMenus < 1 && base.ShouldAllowAutoHide();
         }
 
         protected override void OnAutoHideAnimationBegin(bool isHiding)
@@ -504,6 +523,8 @@ namespace RetroBar
 
         public void SetTrayHost()
         {
+            // Explicit tray/Start interactions may select another bar in All mode, as before.
+            // Passive position updates use only IsMainTaskbar so the bars do not compete.
             _shellManager.NotificationArea.SetTrayHostSizeData(new TrayHostSizeData
             {
                 edge = (NativeMethods.ABEdge)AppBarEdge,
@@ -541,7 +562,7 @@ namespace RetroBar
 
         private void UpdateTrayPosition()
         {
-            if (Screen.Primary)
+            if (IsMainTaskbar)
             {
                 SetTrayHost();
             }
@@ -549,7 +570,7 @@ namespace RetroBar
 
         private void UpdateStartButton()
         {
-            if (!Screen.Primary && !Settings.Instance.ShowStartButtonMultiMon)
+            if (!IsMainTaskbar && !Settings.Instance.ShowStartButtonMultiMon)
             {
                 StartButton.Visibility = Visibility.Collapsed;
                 return;

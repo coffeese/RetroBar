@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net6.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <LangVersion>12</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ManagedShell" Version="0.0.372" />
+    <Compile Include="..\RetroBar\Utilities\MonitorSelection.cs" Link="MonitorSelection.cs" />
+    <Compile Include="..\RetroBar\Utilities\Settings.cs" Link="Settings.cs" />
+    <Compile Include="..\RetroBar\Utilities\SettingsManager.cs" Link="SettingsManager.cs" />
+  </ItemGroup>
+</Project>

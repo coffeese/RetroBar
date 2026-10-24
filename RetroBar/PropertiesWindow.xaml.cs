@@ -29,6 +29,15 @@ namespace RetroBar
         private readonly AppBarScreen _screen;
 
         private FileSystemWatcher _themesWatcher;
+        private bool _loadingTargetMonitors;
+        private bool _closed;
+        private bool _initialPositionSet;
+
+        private sealed class MonitorChoice
+        {
+            public string DeviceName { get; set; }
+            public string Label { get; set; }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -78,6 +87,11 @@ namespace RetroBar
 
             InitializeComponent();
 
+            // SizeToContent must still fit the monitor that owns the taskbar.
+            MaxHeight = Math.Max(1, (_screen.WorkingArea.Height / _dpiScale) - 20);
+            MaxWidth = Math.Max(1, (_screen.WorkingArea.Width / _dpiScale) - 20);
+            MinWidth = Math.Min(MinWidth, MaxWidth);
+
             LoadPreviewHeight();
             LoadAutoStart();
             LoadLanguages();
@@ -87,8 +101,10 @@ namespace RetroBar
             LoadWidth();
             LoadAppInfo();
             LoadClockActions();
+            LoadTargetMonitors();
 
             Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
         }
 
         private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -106,6 +122,95 @@ namespace RetroBar
             {
                 LoadAppInfo();
                 LoadClockActions();
+                LoadTargetMonitors();
+            }
+            else if (e.PropertyName == nameof(Settings.TargetMonitorDeviceName) ||
+                e.PropertyName == nameof(Settings.StartMenuMonitorDeviceName))
+            {
+                LoadTargetMonitors();
+            }
+        }
+
+        private void LoadTargetMonitors()
+        {
+            _loadingTargetMonitors = true;
+            try
+            {
+                var screens = AppBarScreen.FromAllScreens();
+                LoadMonitorChoices(cboTargetMonitor, screens, Settings.Instance.TargetMonitorDeviceName,
+                    (string)FindResource("primary_display"));
+                LoadMonitorChoices(cboStartMenuMonitor, screens, Settings.Instance.StartMenuMonitorDeviceName,
+                    (string)FindResource("same_as_taskbar"));
+            }
+            finally
+            {
+                _loadingTargetMonitors = false;
+            }
+        }
+
+        private void LoadMonitorChoices(System.Windows.Controls.ComboBox comboBox, List<AppBarScreen> screens,
+            string target, string defaultLabel)
+        {
+            var choices = new List<MonitorChoice>
+            {
+                new MonitorChoice { DeviceName = "", Label = defaultLabel }
+            };
+            foreach (var screen in screens)
+            {
+                string primary = screen.Primary ? $" ({FindResource("primary_display")})" : "";
+                choices.Add(new MonitorChoice
+                {
+                    DeviceName = screen.DeviceName,
+                    Label = $"{screen.DeviceName} — {screen.Bounds.Width} × {screen.Bounds.Height}{primary}"
+                });
+            }
+
+            var selected = choices.FirstOrDefault(choice =>
+                string.Equals(choice.DeviceName, target, StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+            {
+                // Preserve a disconnected selection while refreshing either dropdown.
+                selected = new MonitorChoice
+                {
+                    DeviceName = target,
+                    Label = $"{target} ({FindResource("display_disconnected")})"
+                };
+                choices.Add(selected);
+            }
+
+            comboBox.ItemsSource = choices;
+            comboBox.SelectedItem = selected;
+        }
+
+        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!_closed)
+                {
+                    LoadTargetMonitors();
+                }
+            });
+        }
+
+        private void CboTargetMonitor_DropDownOpened(object sender, EventArgs e)
+        {
+            LoadTargetMonitors();
+        }
+
+        private void CboTargetMonitor_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (!_loadingTargetMonitors && cboTargetMonitor.SelectedItem is MonitorChoice choice)
+            {
+                Settings.Instance.TargetMonitorDeviceName = choice.DeviceName;
+            }
+        }
+
+        private void CboStartMenuMonitor_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (!_loadingTargetMonitors && cboStartMenuMonitor.SelectedItem is MonitorChoice choice)
+            {
+                Settings.Instance.StartMenuMonitorDeviceName = choice.DeviceName;
             }
         }
 
@@ -276,7 +381,7 @@ namespace RetroBar
             });
         }
 
-        private void UpdateWindowPosition()
+        private void SetInitialWindowPosition()
         {
             switch (Settings.Instance.Edge)
             {
@@ -289,14 +394,30 @@ namespace RetroBar
                     Top = (_screen.Bounds.Top / _dpiScale) + _barSize + 10;
                     break;
                 case AppBarEdge.Right:
-                    Left = (_screen.Bounds.Right / _dpiScale) - _barSize - Width - 10;
+                    Left = (_screen.Bounds.Right / _dpiScale) - _barSize - ActualWidth - 10;
                     Top = (_screen.WorkingArea.Top / _dpiScale) + 10;
                     break;
                 case AppBarEdge.Bottom:
                     Left = (_screen.WorkingArea.Left / _dpiScale) + 10;
-                    Top = (_screen.Bounds.Bottom / _dpiScale) - _barSize - Height - 10;
+                    Top = (_screen.Bounds.Bottom / _dpiScale) - _barSize - ActualHeight - 10;
                     break;
             }
+
+            KeepWindowInWorkArea();
+        }
+
+        private void KeepWindowInWorkArea()
+        {
+            // Preserve the user's position when content resizes. Only correct an actual overflow,
+            // using the current monitor rather than the monitor from which the dialog was opened.
+            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            var workArea = Screen.FromHandle(handle).WorkingArea;
+            double dpiScale = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+
+            Left = Math.Max(workArea.Left / dpiScale,
+                Math.Min(Left, (workArea.Right / dpiScale) - ActualWidth));
+            Top = Math.Max(workArea.Top / dpiScale,
+                Math.Min(Top, (workArea.Bottom / dpiScale) - ActualHeight));
         }
 
         private void OK_OnClick(object sender, RoutedEventArgs e)
@@ -322,6 +443,8 @@ namespace RetroBar
 
         private void PropertiesWindow_OnClosing(object sender, CancelEventArgs e)
         {
+            _closed = true;
+            SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
             _instance = null;
             if (_themesWatcher != null)
             {
@@ -334,14 +457,27 @@ namespace RetroBar
 
         private void PropertiesWindow_OnLoaded(object sender, RoutedEventArgs e)
         {
-            Left = 10;
-            Top = (ScreenHelper.PrimaryMonitorDeviceSize.Height / DpiHelper.DpiScale) - Height - 40;
-            UpdateWindowPosition();
+            if (!_initialPositionSet)
+            {
+                SetInitialWindowPosition();
+                _initialPositionSet = true;
+            }
+        }
+
+        private void PropertiesWindow_OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_initialPositionSet)
+            {
+                KeepWindowInWorkArea();
+            }
         }
 
         private void PropertiesWindow_OnContentRendered(object sender, EventArgs e)
         {
-            UpdateWindowPosition();
+            if (_initialPositionSet)
+            {
+                KeepWindowInWorkArea();
+            }
         }
 
         private void CbAutoStart_OnChecked(object sender, RoutedEventArgs e)

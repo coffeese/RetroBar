@@ -111,7 +111,7 @@ namespace RetroBar.Controls
 
         private void Window_GetButtonRect(ref NativeMethods.ShortRect rect)
         {
-            if (Host?.Host?.Screen.Primary != true && Settings.Instance.MultiMonMode != MultiMonOption.SameAsWindow)
+            if (Host?.Host?.IsMainTaskbar != true && Settings.Instance.MultiMonMode != MultiMonOption.SameAsWindow)
             {
                 // If there are multiple instances of a button, use the button on the primary display only
                 return;
