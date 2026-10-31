@@ -435,6 +435,21 @@ namespace RetroBar
             ShellHelper.StartTaskManager();
         }
 
+        private void DeviceManagerMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            ShellHelper.StartProcess("devmgmt.msc");
+        }
+
+        private void WindowsSettingsMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            ShellHelper.StartProcess("ms-settings:");
+        }
+
+        private void ControlPanelMenuItem_OnClick(object sender, RoutedEventArgs e)
+        {
+            ShellHelper.StartProcess("control.exe");
+        }
+
         private void UpdateAvailableMenuItem_OnClick(object sender, RoutedEventArgs e)
         {
             ProcessStartInfo psi = new ProcessStartInfo

@@ -143,6 +143,9 @@
             <!--StaticResourceExtension ResourceKey="ToolbarsItem" />
             <Separator /-->
             <StaticResourceExtension ResourceKey="TaskManagerMenuItem" />
+            <MenuItem Header="{DynamicResource device_manager}" Click="DeviceManagerMenuItem_OnClick" />
+            <MenuItem Header="{DynamicResource windows_settings}" Click="WindowsSettingsMenuItem_OnClick" />
+            <MenuItem Header="{DynamicResource control_panel}" Click="ControlPanelMenuItem_OnClick" />
             <Separator />
             <MenuItem x:Name="UpdateAvailableMenuItem"
                       Header="{DynamicResource update_available}"

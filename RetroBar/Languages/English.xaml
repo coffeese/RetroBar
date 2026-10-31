@@ -143,6 +143,9 @@
     <s:String x:Key="undo_minimize_all">_Undo Minimize All</s:String>
     <s:String x:Key="show_taskman_2k">Tas_k Manager...</s:String>
     <s:String x:Key="show_taskman">Tas_k Manager</s:String>
+    <s:String x:Key="device_manager">_Device Manager</s:String>
+    <s:String x:Key="windows_settings">_Windows Settings</s:String>
+    <s:String x:Key="control_panel">Control _Panel</s:String>
     <s:String x:Key="tray_properties">P_roperties</s:String>
     <s:String x:Key="update_available">_Update available...</s:String>
     <s:String x:Key="exit_retrobar">_Exit RetroBar</s:String>
